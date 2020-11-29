@@ -7,7 +7,6 @@ const targetPoint = new Vector3();
 const directionVector = new Vector3();
 const targetPointSubSegmentStartPoint = new Vector3();
 
-// let f = false
 /**
  * @param {{x: Number, y: Number}[]} points array of point objects
  * @returns {x: Number, y: Number} point object
@@ -16,11 +15,8 @@ export default function closestPointInPolygon(points, { x: targetPointX, y: targ
   let minimalDistance = Infinity;
   let closestPoint = points[0];
 
-  points.reduce((previousPoint, currentPoint) => {
-    // if (!f) {
-    //   console.log('currentPoint, previousPoint', currentPoint, previousPoint);
-    // }
-    
+  // I used reduce here to improve readability of the process of taking 2 points for each iteration.
+  points.reduce((previousPoint, currentPoint) => {  
     segmentStartPoint.set(previousPoint.x, previousPoint.y,  0.0);
     segmentEndPoint.set(currentPoint.x, currentPoint.y,  0.0);
     targetPoint.set(targetPointX, targetPointY, 0);
@@ -34,10 +30,11 @@ export default function closestPointInPolygon(points, { x: targetPointX, y: targ
     let distance = 0;
     let intersect = new Vector3();
 
+    // We need to fix a closest point at the beginning of a segment.
     if (closestSegmentIndex < 0) {
       intersect = segmentStartPoint;
       distance = targetPoint.clone().sub(segmentStartPoint).length();
-    } else if (closestSegmentIndex > 1) {
+    } else if (closestSegmentIndex > 1) { // Fix a closest point at the ending of a segment.
       intersect.addVectors(segmentStartPoint, directionVector);
       distance = targetPoint.clone().sub(segmentEndPoint).length();
     } else {
@@ -52,7 +49,6 @@ export default function closestPointInPolygon(points, { x: targetPointX, y: targ
 
     return currentPoint;
   });
-  // f=true
 
   return closestPoint;
 }

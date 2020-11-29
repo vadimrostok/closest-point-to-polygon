@@ -1,6 +1,6 @@
-import ClosestPointDemo from './ClosestPointDemo.js';
+import ClosestPointDemoPage from './ClosestPointDemoPage.js';
 
-ClosestPointDemo();
+ClosestPointDemoPage();
 
 if (module.onReload) {
   module.onReload(() => {

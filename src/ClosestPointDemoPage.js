@@ -1,30 +1,14 @@
-/**
-TODO:
-*/ 
-import 'regenerator-runtime/runtime.js';
-
-import Stats from './stats.js';
-
 import {
-  WebGLRenderer,
-  OrthographicCamera,
-  Scene,
-  Color,
-  Shape,
-  Mesh,
-  ShapeGeometry,
-  MeshBasicMaterial,
-  MeshPhysicalMaterial,
-  AmbientLight,
-  SphereGeometry,
-  BufferAttribute,
-  BufferGeometry,
-  Line,
-  LineBasicMaterial,
-  Vector3,
-  Vector2,
-  Raycaster,
+  WebGLRenderer, OrthographicCamera, Scene, Color, Shape, Mesh, ShapeGeometry,
+  AmbientLight, SphereGeometry, BufferAttribute, BufferGeometry, Line,
+  Vector3, Vector2, Raycaster,
 } from 'three';
+
+import Stats from './lib/stats.js';
+
+import { outlineMaterial, raycastTargetMeshMaterial } from './materials.js';
+import { sceneBackgroundColor } from './constants.js';
+import shapes from './shapes.js';
 
 import closestPointInPolygon from './closestPointInPolygon';
 
@@ -47,9 +31,8 @@ export default () => {
   document.body.appendChild( stats.domElement );
 
   const scene = new Scene();
-  scene.background = new Color( 0xbfd1e5 );
+  scene.background = new Color(sceneBackgroundColor);
 
-  // const camera = new OrthographicCamera(width/-2, width/2, height/2, height/-2, 1, 1000);
   let [windowWidth, windowHeight] = [window.innerWidth, window.innerHeight];
   let aspectRatio = windowWidth/windowHeight;
   const camera = new OrthographicCamera(
@@ -74,59 +57,11 @@ export default () => {
     camera.updateProjectionMatrix();
   }, false);
 
-  const polygonPointerMultiplier = 0.1;
-  function createPolygonPointer(color, points) {
-    const pointer = new Shape();
-
-    pointer.moveTo(points[0].x * polygonPointerMultiplier, points[0].y * polygonPointerMultiplier);
-    points.slice(1).forEach(({ x, y }) => {
-      pointer.lineTo(x * polygonPointerMultiplier, y * polygonPointerMultiplier);
-    });
-
-    const polygonPointer = new Mesh(new ShapeGeometry(pointer), new MeshBasicMaterial({ color }));
-    polygonPointer.position.set(0, 0, 0.5);
+  shapes.forEach((shape) => {
+    const { points, position, polygonPointer } = shape;
 
     scene.add(polygonPointer);
 
-    return polygonPointer;
-  }
-
-  const shapes = [
-    (() => {
-      const points = [
-        { x: -10.0, y: -10.0 },
-        { x: 10.0, y: -10.0 },
-        { x: 0.0,  y: 0.0 },
-        { x: 10.0, y:  10.0 },
-        { x: -10.0, y:  10.0 },
-        { x: -10.0, y: -10.0 },
-      ];
-
-      return { // flag
-        position: { x: -20, y: 20 },
-        points,
-        polygonPointer: createPolygonPointer(0xffff00, points),
-        mesh: null,
-      };
-    })(),
-    (() => {
-      const points = [
-        { x: -10.0, y: -10.0 },
-        { x: 10.0, y: -10.0 },
-        { x: 0.0,  y: 10.0 },
-        { x: -10.0, y: -10.0 },
-      ];
-      return { // triangle
-        position: { x: 20, y: 20 },
-        points,
-        polygonPointer: createPolygonPointer(0xff00ff, points),
-        mesh: null,
-      };
-    })()
-  ];
-
-  shapes.forEach((shape) => {
-    const { points, position } = shape;
     const geometry = new BufferGeometry();
     const vertices = new Float32Array(points.reduce((a, { x, y }) => {
       a = a.concat([x, y, 0]);
@@ -135,19 +70,32 @@ export default () => {
 
     geometry.addAttribute('position', new BufferAttribute(vertices, 3));
 
-    const lineMesh = new Line(geometry, new LineBasicMaterial({
-      color: 0xff3377,
-      linewidth: 5,
-      linecap: 'round',
-      linejoin:  'round'
-    }));
+    const lineMesh = new Line(geometry, outlineMaterial);
 
-    // TODO: add comment
-    const raycastTargetMesh = new Mesh(geometry, new MeshBasicMaterial({
-      color: 0xaabbcc,
-    }));
+    /**
+     * I used line mesh to outline shapes, but raycaster detects intersections with it only
+     * on borders, so we need a "filled" mesh for raycaster.
+     */
+    let raycastTargetMesh;
+    /**
+     * I wanted sphere to be big and smooth, but I don't want to compute distances to polygon edges
+     * that are going to its center (required to have a filled sphere), so for sphere we have only 
+     * outline set of vertices for line mesh, bug full set for triangle polygons for raycaster target mesh.
+     */
+    if (shape.targetMeshPoints) {
+      const raycastTargetGeometry = new BufferGeometry();
+      const raycastTargetVertices = new Float32Array(shape.targetMeshPoints.reduce((a, { x, y }) => {
+        a = a.concat([x, y, 0]);
+        return a;
+      }, []));
 
-    lineMesh.position.set(position.x, position.y, 0);
+      raycastTargetGeometry.addAttribute('position', new BufferAttribute(raycastTargetVertices, 3));
+      raycastTargetMesh = new Mesh(raycastTargetGeometry, raycastTargetMeshMaterial);
+    } else {
+      raycastTargetMesh = new Mesh(geometry, raycastTargetMeshMaterial);
+    }
+
+    lineMesh.position.set(position.x, position.y, 0.1);
     raycastTargetMesh.position.set(position.x, position.y, 0);
 
     shape.mesh = raycastTargetMesh;
@@ -155,19 +103,6 @@ export default () => {
     scene.add(lineMesh);
     scene.add(raycastTargetMesh);
   });
-
-  // const closestPoint = new Mesh(new SphereGeometry(2, 8, 8), new MeshBasicMaterial({color: 0xff0000}));
-  // closestPoint.position.x = 0;
-  // closestPoint.position.y = 0;
-  // closestPoint.position.z = 0;
-
-  // scene.add(closestPoint);
-
-  const light = new AmbientLight( 0x404040 ); // soft white light
-  scene.add( light );
-
-  // let useIntersects = false;
-  // setTimeout(() => { useIntersects = true; }, 3000);
 
   function loop() {
     requestAnimationFrame( loop );
